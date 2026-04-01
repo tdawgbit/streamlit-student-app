@@ -1,0 +1,16 @@
+source: arrests is duckdb.table("ICE/Data/arrests-latest.csv") extend {
+
+}
+
+run: arrests -> {
+  group_by: apprehension_aor
+  aggregate: num_arrests
+  order_by: num_arrests desc
+  limit: 10
+  nest: by_country is {
+    group_by: citizenship_country
+    aggregate: num_arrests
+    order_by: num_arrests desc
+    limit: 5
+  }
+}

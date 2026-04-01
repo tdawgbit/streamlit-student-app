@@ -1,0 +1,224 @@
+source: MarchMadness is duckdb.table("MalloyHW/Formatted Data/538 Ratings.csv") extend {
+
+  // ============================================================
+  // CUSTOM DIMENSIONS
+  // ============================================================
+
+  dimension: round_name is pick 'First Round' when `ROUND` = 64
+    pick 'Second Round' when `ROUND` = 32
+    pick 'Sweet 16' when `ROUND` = 16
+    pick 'Elite 8' when `ROUND` = 8
+    pick 'Final Four' when `ROUND` = 4
+    pick 'Championship' when `ROUND` = 2
+    pick 'Champion' when `ROUND` = 1
+    else 'Unknown'
+
+  dimension: seed_tier is pick '1 Blue Blood' when `SEED` <= 2
+    pick '2 Contender' when `SEED` <= 5
+    pick '3 Dangerous' when `SEED` <= 8
+    pick '4 Upset Threat' when `SEED` <= 11
+    else '5 Cinderella'
+
+  // ============================================================
+  // MEASURES
+  // ============================================================
+
+  measure: team_count        is count()
+  measure: avg_power_rating  is avg(`POWER RATING`)
+  measure: max_power_rating  is max(`POWER RATING`)
+  measure: min_power_rating  is min(`POWER RATING`)
+  measure: avg_seed          is avg(`SEED`)
+  measure: avg_round_reached is avg(`ROUND`)
+
+  // ============================================================
+  // VIEWS
+  // ============================================================
+
+  view: rating_by_seed is {
+    group_by:
+      `SEED`
+      seed_tier
+    aggregate:
+      team_count
+      avg_power_rating
+      max_power_rating
+      avg_round_reached
+    order_by: `SEED`
+  }
+
+  view: seed_advancement is {
+    group_by:
+      `SEED`
+      seed_tier
+    aggregate:
+      avg_round_reached
+      team_count
+    order_by: `SEED`
+  }
+
+  view: top_teams is {
+    group_by:
+      `TEAM`
+      `YEAR`
+      `SEED`
+      seed_tier
+      `POWER RATING`
+      `POWER RATING RANK`
+    order_by: `POWER RATING` desc
+    limit: 20
+  }
+
+  view: by_year is {
+    group_by: `YEAR`
+    aggregate:
+      team_count
+      avg_power_rating
+      max_power_rating
+      min_power_rating
+    order_by: `YEAR`
+  }
+
+  view: upset_candidates is {
+    group_by:
+      `TEAM`
+      `YEAR`
+      `SEED`
+      seed_tier
+      `POWER RATING`
+      `POWER RATING RANK`
+    where: `SEED` >= 9
+    order_by: `POWER RATING` desc
+    limit: 20
+  }
+
+  view: rating_by_seed_tier is {
+    group_by: seed_tier
+    aggregate:
+      team_count
+      avg_power_rating
+      max_power_rating
+      min_power_rating
+      avg_round_reached
+    order_by: seed_tier
+  }
+
+  view: overachievers is {
+    group_by:
+      `TEAM`
+      `YEAR`
+      `SEED`
+      `ROUND`
+      seed_tier
+      round_name
+      `POWER RATING`
+    where: `ROUND` <= 8 and `SEED` >= 6
+    order_by: `SEED` desc, `ROUND`
+    limit: 25
+  }
+
+  view: rating_by_round is {
+    group_by:
+      `ROUND`
+      round_name
+    aggregate:
+      team_count
+      avg_power_rating
+      avg_seed
+    order_by: `ROUND`
+  }
+
+  view: best_1_seeds is {
+    group_by:
+      `TEAM`
+      `YEAR`
+      `POWER RATING`
+      `POWER RATING RANK`
+      round_name
+    where: `SEED` = 1
+    order_by: `POWER RATING` desc
+    limit: 20
+  }
+
+  view: weakest_field_teams is {
+    group_by:
+      `TEAM`
+      `YEAR`
+      `SEED`
+      `POWER RATING`
+      `POWER RATING RANK`
+    order_by: `POWER RATING`
+    limit: 20
+  }
+
+  view: seed_tier_with_top_teams is {
+    group_by: seed_tier
+    aggregate:
+      team_count
+      avg_power_rating
+      avg_round_reached
+    nest: top_teams_in_tier is {
+      group_by:
+        `TEAM`
+        `YEAR`
+        `SEED`
+        `POWER RATING`
+        round_name
+      order_by: `POWER RATING` desc
+      limit: 3
+    }
+    order_by: seed_tier
+  }
+
+  view: year_with_top_teams is {
+    group_by: `YEAR`
+    aggregate:
+      team_count
+      avg_power_rating
+      max_power_rating
+    nest: top_teams_that_year is {
+      group_by:
+        `TEAM`
+        `SEED`
+        `POWER RATING`
+        round_name
+      order_by: `POWER RATING` desc
+      limit: 3
+    }
+    order_by: `YEAR` desc
+  }
+
+  view: power_rating_by_seed_chart is {
+    # bar_chart
+    group_by: `SEED` # tooltip
+    aggregate:
+      avg_power_rating
+      avg_round_reached
+      team_count
+    order_by: `SEED`
+  }
+
+  view: power_rating_trend_by_year is {
+    # line_chart
+    group_by: `YEAR` # tooltip
+    aggregate:
+      avg_power_rating
+      max_power_rating
+      team_count
+    order_by: `YEAR`
+  }
+}
+
+#For Bracket Picks
+run: MarchMadness -> top_teams
+run: MarchMadness -> upset_candidates
+run: MarchMadness -> overachievers
+
+#For Seed Analysis
+run: MarchMadness -> by_year
+run: MarchMadness -> year_with_top_teams
+run: MarchMadness -> rating_by_round
+
+#For historical trends
+run: MarchMadness -> by_year
+run: MarchMadness -> year_with_top_teams
+run: MarchMadness -> rating_by_round
