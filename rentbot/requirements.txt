@@ -1,0 +1,8 @@
+langchain
+langchain-groq
+langchain-community
+langgraph
+gradio
+pandas
+python-dotenv
+requests
